@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#173328">
+<title>Your Life, In Receipts</title>
+<!-- One <link> per font so a failed request can't take the others down. All have fallbacks. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Doto:wght@700&display=swap" rel="stylesheet">
+<style>
+/* ───────────────────────── tokens ─────────────────────────
+   Ledger-green desk, thermal-white receipts, rubber-stamp inks, canary carbon copy for "selected". */
+*{box-sizing:border-box;margin:0}
+:root{
+  color-scheme:dark;
+  --desk:#173328;--panel:#1e4034;--rule:#ffffff12;--line:#ffffff26;
+  --cream:#eef1e6;--mute:#a3bba9;
+  --paper:#fbfaf4;--ink:#1b2028;--faint:#6b7280;--dash:#c9c6b8;
+  --canary:#f4e27e;
+  --ui:"Hanken Grotesk",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --tape:"Courier Prime","Courier New",ui-monospace,monospace;
+  --dot:"Doto","Courier Prime",ui-monospace,monospace;
+}
+html{scroll-behavior:smooth}
+body{background:var(--desk);
+  background-image:repeating-linear-gradient(to bottom,transparent 0 35px,var(--rule) 35px 36px);
+  color:var(--cream);font:15px/1.5 var(--ui);-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--canary);outline-offset:2px}
+.app{max-width:1240px;margin:0 auto;padding:0 18px 90px}
+
+/* ───────────────────────── header ───────────────────────── */
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px;padding:20px 0 12px}
+.brand{display:flex;align-items:center;gap:12px;flex:1 1 280px;min-width:0}
+h1{font:700 clamp(22px,3vw,30px)/1 var(--dot);font-weight:700}
+.badge{font-size:12px;border:1px dashed var(--mute);color:var(--mute);border-radius:99px;padding:1px 9px;white-space:nowrap}
+.badge[hidden]{display:none}
+.search{flex:1 1 220px;max-width:360px}
+.search input{width:100%;background:var(--paper);color:var(--ink);border:0;border-radius:8px;padding:9px 12px;font:inherit}
+.search input::placeholder{color:#7b8290}
+.modes{display:flex;gap:2px;border:1px solid var(--line);border-radius:9px;padding:3px}
+.modes button{background:none;border:0;padding:6px 16px;border-radius:6px;cursor:pointer;color:var(--mute)}
+.modes button.on{background:var(--cream);color:var(--desk);font-weight:600}
+
+/* type filters: little paper tags with the stamp ink down the left edge */
+.chips{display:flex;gap:8px;overflow-x:auto;padding:4px 2px 12px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;display:flex;align-items:center;gap:8px;background:var(--paper);color:var(--ink);border:0;border-left:6px solid var(--c,var(--cream));border-radius:3px;padding:5px 11px 5px 8px;font-size:13px;cursor:pointer}
+.chip b{font-weight:500;color:var(--faint)}
+.chip.off{background:transparent;color:var(--mute);outline:1px dashed var(--line);outline-offset:-1px}
+.chip.off b{color:var(--mute)}
+
+/* ───────────────────────── journey strip ───────────────────────── */
+.strip{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+.strip-h{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 16px;font-size:12.5px;color:var(--mute);margin-bottom:8px}
+.plot{position:relative;height:66px;cursor:crosshair;touch-action:none;user-select:none;-webkit-user-select:none}
+.bands,.bars{position:absolute;inset:0;pointer-events:none}
+.band{position:absolute;top:0;bottom:0;background:var(--bt);border-left:1px solid var(--panel)}
+.bars{display:flex;align-items:flex-end;gap:1px}
+.bar{flex:1 1 0;min-width:0;background:var(--cream);border-radius:1px 1px 0 0}
+.bar.out{opacity:.2}
+.brush{position:absolute;top:-3px;bottom:-3px;border:2px solid var(--canary);background:#f4e27e26;border-radius:5px;pointer-events:none;display:none}
+.labels{position:relative;height:22px;margin-top:6px}
+.lab{position:absolute;top:0;height:22px;background:none;border:0;border-left:1px solid var(--line);padding:0 6px;font-size:12px;color:var(--mute);text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+.lab:hover,.lab.act{color:var(--cream)}
+.lab.act{border-left-color:var(--canary)}
+
+.active{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-height:30px;margin:10px 0 2px;font-size:13px;color:var(--mute)}
+.tag{background:none;border:1px solid var(--line);color:var(--cream);border-radius:99px;padding:2px 11px;font-size:12.5px;cursor:pointer}
+.tag.reset{border-color:var(--canary);color:var(--canary)}
+
+/* ───────────────────────── layout ───────────────────────── */
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 370px;gap:28px;align-items:start;margin-top:8px}
+
+/* ───────────────────────── receipts ───────────────────────── */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(205px,1fr));gap:20px 16px;align-items:start}
+.sheet{position:relative;filter:drop-shadow(0 5px 7px #0006)}
+.rc{cursor:pointer;transition:opacity .2s}
+.paper{background:var(--paper);color:var(--ink);padding:12px 13px 22px;font:13px/1.4 var(--tape);
+  -webkit-mask:conic-gradient(from -45deg at bottom,#0000,#000 1deg 89deg,#0000 90deg) 50%/12px 100%;
+          mask:conic-gradient(from -45deg at bottom,#0000,#000 1deg 89deg,#0000 90deg) 50%/12px 100%}
+.rc-h{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.stamp{font-weight:700;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--c);border:1.5px solid var(--c);border-radius:3px;padding:0 5px;transform:rotate(-2deg)}
+.rc-h time{font-size:11px;color:var(--faint);text-align:right}
+.rc-t{font-weight:700;font-size:14px;line-height:1.3;overflow-wrap:anywhere}
+.rc-d{color:var(--faint);font-size:12px;margin-top:4px}
+.rc-f{display:flex;justify-content:space-between;gap:8px;margin-top:9px;padding-top:6px;border-top:1.5px dashed var(--dash);font-size:11.5px;color:var(--faint)}
+.rc.sel .paper{background:var(--canary);box-shadow:inset 0 0 0 2px var(--ink)}
+.rc.linked .paper{box-shadow:inset 0 0 0 3px var(--c)}
+.rc.dim{opacity:.3}
+
+/* ───────────────────────── story mode ───────────────────────── */
+.hero{display:grid;grid-template-columns:minmax(240px,320px) minmax(0,1fr);gap:28px 48px;align-items:center;padding:24px 0 8px}
+.tape .paper{padding:16px 16px 26px}
+.tape.print .paper{animation:print 1.2s steps(24,end) both}
+@keyframes print{from{clip-path:inset(0 0 100% 0)}to{clip-path:inset(0 0 0 0)}}
+.ctr{text-align:center}
+.tape .big{font-weight:700;font-size:15px;letter-spacing:.04em}
+.faint{color:var(--faint)}
+.tape hr{border:0;border-top:1.5px dashed var(--dash);margin:10px 0}
+.line{display:flex;align-items:baseline;gap:6px;width:100%;background:none;border:0;padding:3px 0;font:inherit;color:inherit;text-align:left;cursor:pointer}
+.line:hover span{text-decoration:underline}
+.line i{flex:1;min-width:10px;border-bottom:1.5px dotted #a9a697;transform:translateY(-3px)}
+.line.total{font-weight:700;cursor:default}
+.hero-copy h2{font:700 clamp(30px,5vw,54px)/1.05 var(--dot);max-width:14ch}
+.hero-copy p{margin-top:14px;max-width:52ch;color:var(--mute);font-size:16px}
+
+.chap{margin:40px 0 10px;scroll-margin-top:14px}
+.chap-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 16px}
+.chap-h h2{font:700 clamp(28px,4.4vw,44px)/1.05 var(--dot)}
+.no{font:700 13px var(--tape);color:var(--cc);border:1.5px solid var(--cc);border-radius:3px;padding:0 6px;transform:rotate(-2deg);align-self:center}
+.chap-d{margin-left:auto;color:var(--mute);font-size:13px}
+.insight{font-size:18px;line-height:1.55;max-width:62ch;margin:10px 0 16px}
+.chap-m{display:grid;grid-template-columns:minmax(200px,340px) 1fr;gap:12px 28px;align-items:end;margin-bottom:20px}
+.clock{display:grid;grid-template-columns:repeat(24,1fr);gap:2px;height:44px;align-items:end}
+.clock i{display:block;height:var(--h);min-height:2px;background:#eef1e655;border-radius:1px}
+.clock i.n{background:var(--canary)}
+.clock i.m{background:#9fd6b0}
+.clock-l{display:flex;justify-content:space-between;font-size:11px;color:var(--mute);margin-top:3px}
+.sig{display:flex;flex-wrap:wrap;gap:6px}
+.sig span{border:1px solid var(--line);border-radius:99px;padding:1px 10px;font-size:12.5px}
+
+/* ───────────────────────── explore mode ───────────────────────── */
+.pats{display:flex;gap:12px;overflow-x:auto;padding:4px 2px 18px;scroll-snap-type:x proximity}
+.pat{flex:none;width:232px;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 14px;cursor:pointer;scroll-snap-align:start}
+.pat b{display:block;font:700 20px/1.15 var(--dot);margin-bottom:5px}
+.pat span{display:block;font-size:13px;color:var(--mute);line-height:1.4}
+.pat.on{border-color:var(--canary);background:#f4e27e1f}
+.empty{padding:40px 0;color:var(--mute);display:grid;gap:12px;justify-items:start}
+
+/* ───────────────────────── side panel ───────────────────────── */
+.aside{position:sticky;top:14px;max-height:calc(100vh - 28px);overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+.aside h3{font:600 14px/1.3 var(--ui);margin:22px 0 8px}
+.aside h3:first-child{margin-top:0}
+.note{color:var(--mute);font-size:14px;margin:10px 0}
+.x{position:absolute;top:22px;right:22px;width:28px;height:28px;border-radius:50%;background:var(--ink);color:var(--paper);border:0;cursor:pointer;z-index:2;line-height:1}
+.det{background:var(--canary);color:var(--ink);font:13px/1.45 var(--tape);padding:14px 14px 16px;border-radius:3px}
+.det .rc-h{padding-right:34px}
+.det .stamp{background:var(--c);color:var(--paper);border-color:var(--c)}
+.det-t{font-weight:700;font-size:16px;line-height:1.3;overflow-wrap:anywhere}
+.det p{margin-top:6px}
+.det dl{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;margin-top:10px;padding-top:8px;border-top:1.5px dashed #0003}
+.det dt{color:#0009}
+.tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px}
+.tags span{font-size:12px;border:1px solid #0004;border-radius:3px;padding:0 6px}
+.map{width:100%;height:auto;display:block}
+.node{cursor:pointer}
+.node text{fill:var(--mute);font:10px var(--ui)}
+.why{list-style:none;padding:0;display:grid;gap:8px}
+.why-i{border:1px solid var(--line);border-radius:6px;padding:8px 10px;cursor:pointer;background:#ffffff08}
+.why-i:hover{background:#ffffff14}
+.why-h{display:flex;gap:9px;align-items:flex-start}
+.why-h i{flex:none;width:10px;height:10px;margin-top:6px;border-radius:2px;background:var(--c);box-shadow:0 0 0 2px var(--paper)}
+.why-h b{font-size:13.5px;font-weight:600;line-height:1.35}
+.why-s{font-size:12px;color:var(--mute);margin:2px 0 6px 19px}
+.why-r{display:flex;flex-wrap:wrap;gap:5px}
+.why-r span{font-size:12px;background:#ffffff14;border-radius:4px;padding:1px 7px}
+.why-i .why-r{margin-left:19px}
+.k-place{color:#7fe0d6}.k-person{color:#f5a3cf}.k-tag{color:#f4e27e}.k-word{color:#b7e37a}.k-same{color:#c9a8f2}.k-time{color:#9cc7f5}
+
+/* ───────────────────────── small screens: panel becomes a bottom sheet ───────────────────────── */
+@media(max-width:900px){
+  .layout{display:block}
+  .aside{position:fixed;left:0;right:0;bottom:0;top:auto;max-height:74vh;border-radius:16px 16px 0 0;border-bottom:0;
+    padding-bottom:calc(20px + env(safe-area-inset-bottom));transform:translateY(105%);transition:transform .25s ease;z-index:30;box-shadow:0 -18px 40px #0009}
+  .aside.open{transform:none}
+  .chap-m{grid-template-columns:1fr}
+}
+@media(max-width:760px){
+  .hero{grid-template-columns:1fr}
+  .hero-copy{order:-1}
+  .chap-d{margin-left:0;flex-basis:100%}
+}
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  .tape.print .paper{animation:none}
+  .aside,.rc{transition:none}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand"><h1>Your Life, In Receipts</h1><span class="badge" id="badge" hidden>demo data</span></div>
+    <label class="search"><input id="q" type="search" placeholder="Search songs, places, notes" autocomplete="off" aria-label="Search receipts"></label>
+    <div class="modes" role="group" aria-label="View"><button data-mode="story" class="on">Story</button><button data-mode="explore">Explore</button></div>
+  </header>
+  <div class="chips" id="chips"></div>
+  <section class="strip" aria-label="Timeline of receipts">
+    <div class="strip-h"><span id="span"></span><span>Drag to pick a period. Tap a day or a chapter.</span></div>
+    <div class="plot" id="plot"><div class="bands" id="bands"></div><div class="bars" id="bars"></div><div class="brush" id="brush"></div></div>
+    <div class="labels" id="labels"></div>
+  </section>
+  <div class="active" id="active"></div>
+  <div class="layout">
+    <main id="main"></main>
+    <aside class="aside" id="aside" aria-live="polite"></aside>
+  </div>
+</div>
+<noscript><p style="padding:24px">This page needs JavaScript to draw your receipts.</p></noscript>
+
+<script>
+'use strict';
+/* ════════════════════════════════════════════════════════════════════
+   1 · DATA  — the only section you must edit to use the real dataset.
+   ────────────────────────────────────────────────────────────────────
+   a) Replace RAW with the hackathon dataset (paste the array, or fetch a local .json).
+   b) Edit adapt() so it maps YOUR field names onto the fields the UI reads.
+   c) Rewrite STORY (chapters) once you've found the arc. Leave it [] to get one chapter per month.
+   d) Set DEMO = false to hide the "demo data" badge.
+   ════════════════════════════════════════════════════════════════════ */
+const DEMO = true;
+
+const RAW = [
+ // January
+ {id:1,  type:'music',    when:'2025-01-07T02:14', title:'Weightless Tides', detail:'Marlow Vale', tags:['ambient','sleep']},
+ {id:2,  type:'search',   when:'2025-01-07T02:31', title:'how to fall asleep fast', tags:['sleep']},
+ {id:3,  type:'message',  when:'2025-01-07T23:40', title:"“Still at the office. Don't wait up.”", detail:'to Dev', people:['Dev'], tags:['work']},
+ {id:4,  type:'photo',    when:'2025-01-09T22:55', title:'Empty floor, one lamp still on', place:'Riverside Office', tags:['work','late']},
+ {id:5,  type:'purchase', when:'2025-01-09T23:20', title:'Late-night noodles', detail:'Wok & Roll', amount:11.5, tags:['food','late']},
+ {id:6,  type:'music',    when:'2025-01-12T01:48', title:'Paper Moons', detail:'The Lantern Club', tags:['piano','sleep']},
+ {id:7,  type:'search',   when:'2025-01-12T02:05', title:'signs of burnout', tags:['burnout','work']},
+ {id:8,  type:'note',     when:'2025-01-14T00:12', title:'Tired of being tired', detail:'Three nights this week under five hours. Something has to move.', tags:['sleep','burnout']},
+ {id:9,  type:'event',    when:'2025-01-15T10:00', title:'Quarterly deadline review', place:'Riverside Office', tags:['work']},
+ {id:10, type:'place',    when:'2025-01-15T21:40', title:'Riverside Office', detail:'Stayed until 11:30 PM', place:'Riverside Office', tags:['work','late']},
+ {id:11, type:'music',    when:'2025-01-18T03:02', title:'Small Rooms', detail:'Ivy & the Static', tags:['acoustic','sleep']},
+ {id:12, type:'movie',    when:'2025-01-19T22:10', title:'Slow Hours', detail:'Drama, 102 min', tags:['sleep']},
+ {id:13, type:'purchase', when:'2025-01-21T08:15', title:'Blackout curtains', detail:'HomeNest', amount:34.99, tags:['sleep']},
+ {id:14, type:'search',   when:'2025-01-23T01:20', title:'can you learn guitar at 27', tags:['guitar','learning']},
+ {id:15, type:'note',     when:'2025-01-23T01:45', title:'Learn something with my hands', detail:'Not for work. Not for anyone. Just because.', tags:['guitar','learning']},
+ {id:16, type:'message',  when:'2025-01-26T19:05', title:"“You sound wiped. Come to open mic at Blue Note next month?”", detail:'from Dev', people:['Dev'], place:'Blue Note Café', tags:['openmic','friends']},
+ // February
+ {id:17, type:'search',   when:'2025-02-02T00:35', title:'beginner acoustic guitar under $150', tags:['guitar','learning']},
+ {id:18, type:'place',    when:'2025-02-04T17:30', title:'Sound Lane Music', detail:'Tried three guitars. Fingers hurt already.', place:'Sound Lane Music', tags:['guitar']},
+ {id:19, type:'purchase', when:'2025-02-04T18:10', title:'Acoustic guitar, natural finish', detail:'Sound Lane Music', amount:129, place:'Sound Lane Music', tags:['guitar']},
+ {id:20, type:'photo',    when:'2025-02-04T20:45', title:'Guitar on the sofa, still in its bag', tags:['guitar']},
+ {id:21, type:'search',   when:'2025-02-05T22:15', title:'G chord buzzing fix', tags:['guitar','learning']},
+ {id:22, type:'music',    when:'2025-02-08T21:30', title:'Third Chord', detail:'Ivy & the Static', tags:['acoustic','guitar']},
+ {id:23, type:'note',     when:'2025-02-10T22:50', title:"First chord that didn't buzz", detail:'G major. Took six days. Smiled at the wall.', tags:['guitar','learning']},
+ {id:24, type:'movie',    when:'2025-02-13T20:20', title:'The Busker', detail:'Documentary, 88 min', tags:['guitar','openmic']},
+ {id:25, type:'purchase', when:'2025-02-15T11:05', title:'Clip-on tuner + picks', detail:'Sound Lane Music', amount:14.5, place:'Sound Lane Music', tags:['guitar']},
+ {id:26, type:'message',  when:'2025-02-16T18:22', title:"“Learned three chords. Don't laugh.”", detail:'to Dev', people:['Dev'], tags:['guitar','friends']},
+ {id:27, type:'music',    when:'2025-02-19T01:10', title:'Slow Harbour', detail:'The Lantern Club', tags:['acoustic','sleep']},
+ {id:28, type:'event',    when:'2025-02-21T19:30', title:'Blue Note open mic (audience)', detail:'Watched. Took notes on how they held the room.', place:'Blue Note Café', tags:['openmic','friends']},
+ {id:29, type:'photo',    when:'2025-02-21T21:12', title:'Stage lights, someone mid-song', place:'Blue Note Café', tags:['openmic']},
+ {id:30, type:'purchase', when:'2025-02-21T21:40', title:'Two coffees', detail:'Blue Note Café', amount:8, place:'Blue Note Café', tags:['friends']},
+ {id:31, type:'search',   when:'2025-02-22T23:05', title:'easy songs 4 chords open mic', tags:['guitar','openmic']},
+ {id:32, type:'note',     when:'2025-02-26T22:30', title:'Slept 7 hours. First time in a month.', detail:'Practiced for 40 minutes, then just stopped thinking about the deadline.', tags:['sleep','guitar']},
+ // March
+ {id:33, type:'search',   when:'2025-03-01T06:10', title:'couch to 5k plan', tags:['running','learning']},
+ {id:34, type:'purchase', when:'2025-03-02T12:40', title:'Running shoes', detail:'Stride & Co', amount:79, tags:['running']},
+ {id:35, type:'music',    when:'2025-03-04T06:00', title:'Run Faster Later', detail:'Neon Parade', tags:['running','morning']},
+ {id:36, type:'place',    when:'2025-03-04T06:05', title:'Lakeside Park', detail:'First run: 12 minutes, mostly walking.', place:'Lakeside Park', tags:['running','morning']},
+ {id:37, type:'photo',    when:'2025-03-04T06:52', title:'Sunrise over the lake', place:'Lakeside Park', tags:['morning','running']},
+ {id:38, type:'message',  when:'2025-03-06T07:30', title:"“Ran before the sun was up. Who am I?”", detail:'to Dev', people:['Dev'], tags:['running','friends']},
+ {id:39, type:'music',    when:'2025-03-09T05:55', title:'Fast Forward Heart', detail:'Neon Parade', tags:['running','morning']},
+ {id:40, type:'place',    when:'2025-03-09T06:10', title:'Lakeside Park', detail:'Ran 2 km without stopping.', place:'Lakeside Park', tags:['running','morning']},
+ {id:41, type:'note',     when:'2025-03-11T21:50', title:'Mornings are mine now', detail:'The 2 AM version of me would not believe this.', tags:['morning','sleep']},
+ {id:42, type:'search',   when:'2025-03-14T20:40', title:'local 5k charity run april', tags:['running','event']},
+ {id:43, type:'event',    when:'2025-03-15T09:00', title:'Signed up: Lakefront 5K', detail:'Race day: April 20', place:'Lakeside Park', tags:['running','event']},
+ {id:44, type:'purchase', when:'2025-03-15T09:04', title:'5K entry fee', detail:'Lakefront Runs', amount:25, tags:['running','event']},
+ {id:45, type:'movie',    when:'2025-03-16T19:45', title:'Finish Line', detail:'Sports drama, 110 min', tags:['running']},
+ {id:46, type:'photo',    when:'2025-03-23T06:40', title:'Shoes by the door, laces tied', tags:['running','morning']},
+ {id:47, type:'message',  when:'2025-03-25T18:00', title:"“Join me Sunday? Lakeside, 6 AM. Bring the guitar for after.”", detail:'to Dev', people:['Dev'], place:'Lakeside Park', tags:['running','guitar','friends']},
+ {id:48, type:'music',    when:'2025-03-30T23:30', title:'Small Rooms', detail:'Ivy & the Static', tags:['acoustic','sleep']},
+ // April
+ {id:49, type:'search',   when:'2025-04-02T21:15', title:'how to calm stage fright', tags:['openmic','learning']},
+ {id:50, type:'note',     when:'2025-04-05T22:20', title:'Setlist v1', detail:'Three songs. Two covers, one I wrote badly on purpose.', tags:['guitar','openmic']},
+ {id:51, type:'message',  when:'2025-04-08T18:40', title:"“Put my name on the Blue Note list. Don't let me back out.”", detail:'to Dev', people:['Dev'], place:'Blue Note Café', tags:['openmic','friends']},
+ {id:52, type:'purchase', when:'2025-04-12T15:10', title:'Guitar strap + spare strings', detail:'Sound Lane Music', amount:22, place:'Sound Lane Music', tags:['guitar','openmic']},
+ {id:53, type:'music',    when:'2025-04-16T06:05', title:'Run Faster Later', detail:'Neon Parade', tags:['running','morning']},
+ {id:54, type:'event',    when:'2025-04-20T08:00', title:'Lakefront 5K', detail:'Finished in 34:12', place:'Lakeside Park', tags:['running','event']},
+ {id:55, type:'photo',    when:'2025-04-20T09:05', title:'Finisher medal on the guitar case', place:'Lakeside Park', tags:['running','guitar']},
+ {id:56, type:'message',  when:'2025-04-20T09:30', title:"“34:12!! Blue Note is next Friday.”", detail:'to Dev', people:['Dev'], place:'Blue Note Café', tags:['running','openmic','friends']},
+ {id:57, type:'place',    when:'2025-04-25T19:15', title:'Blue Note Café', detail:'Arrived early. Hands shaking.', place:'Blue Note Café', tags:['openmic']},
+ {id:58, type:'event',    when:'2025-04-25T20:10', title:'Blue Note open mic (performing)', detail:'Three songs. Forgot a verse. Nobody minded.', place:'Blue Note Café', tags:['openmic','guitar']},
+ {id:59, type:'photo',    when:'2025-04-25T20:42', title:"Dev's photo: me on stage, mid-chord", place:'Blue Note Café', people:['Dev'], tags:['openmic','guitar','friends']},
+ {id:60, type:'purchase', when:'2025-04-25T22:00', title:'Round of coffees for the room', detail:'Blue Note Café', amount:26, place:'Blue Note Café', tags:['openmic','friends']},
+ {id:61, type:'music',    when:'2025-04-25T23:50', title:'Third Chord', detail:'Ivy & the Static', tags:['acoustic','guitar']},
+ {id:62, type:'note',     when:'2025-04-26T07:15', title:'Same hours, different person', detail:"January: awake at 2 AM because I couldn't stop. April: awake at 6 AM because I wanted to.", tags:['sleep','morning','openmic']}
+];
+
+/* Chapters are authored, not computed: the code finds the evidence, you write the story. */
+const STORY = [
+ {id:'c1', title:'The Night Shift',     from:'2025-01-06', to:'2025-01-31', insight:'Work eats the evenings. The small hours fill up with sleep searches, ambient playlists and one sentence: “something has to move.”'},
+ {id:'c2', title:'The Guitar Detour',   from:'2025-02-01', to:'2025-02-28', insight:"A 1 AM search becomes a guitar, a tuner and a seat at someone else's open mic. It also brings the first full night of sleep in a month."},
+ {id:'c3', title:'Running on Sunrise',  from:'2025-03-01', to:'2025-03-31', insight:'The hours flip. Playlists move from 3 AM to 6 AM, and lakeside sunrises replace the empty office floor.'},
+ {id:'c4', title:'Open Mic',            from:'2025-04-01', to:'2025-04-30', insight:'A medal on a guitar case, three songs on a stage. The same hours as January, for different reasons.'}
+];
+
+/* Map whatever type names the real dataset uses onto the nine the UI knows. Unknown types still work (grey stamp). */
+const TYPE_ALIASES = {song:'music',track:'music',audio:'music',film:'movie',tv:'movie',show:'movie',entertainment:'movie',
+  location:'place',visit:'place',checkin:'place',order:'purchase',transaction:'purchase',image:'photo',picture:'photo',
+  text:'message',chat:'message',query:'search',calendar:'event',journal:'note',memo:'note'};
+
+const TYPES = {
+  music:   {one:'Music',    many:'Music',     color:'#c23b30'},
+  movie:   {one:'Movie',    many:'Movies',    color:'#6d3fa0'},
+  place:   {one:'Place',    many:'Places',    color:'#12808a'},
+  purchase:{one:'Purchase', many:'Purchases', color:'#8a5a00'},
+  photo:   {one:'Photo',    many:'Photos',    color:'#27498f'},
+  message: {one:'Message',  many:'Messages',  color:'#b02d78'},
+  search:  {one:'Search',   many:'Searches',  color:'#3f7d20'},
+  event:   {one:'Event',    many:'Events',    color:'#c9560f'},
+  note:    {one:'Note',     many:'Notes',     color:'#55606e'}
+};
+
+/* ── adapt(): map ONE raw record onto the shape the UI reads. Edit the right-hand sides. ── */
+function adapt(raw) {
+  const t = String(raw.type || 'note').toLowerCase();
+  const type = TYPE_ALIASES[t] || t;
+  if (!TYPES[type]) TYPES[type] = {one: cap(type), many: cap(type), color: '#55606e'};
+  const list = v => Array.isArray(v) ? v : (v ? [v] : []);
+  return {
+    id:     String(raw.id),
+    type:   type,
+    ts:     new Date(raw.when).getTime(),        // ← your timestamp field
+    title:  String(raw.title || ''),             // ← the headline of the receipt
+    detail: String(raw.detail || ''),            // ← any secondary text
+    place:  raw.place || '',                     // ← location name, if any
+    people: list(raw.people),                    // ← names, if any
+    tags:   list(raw.tags).map(x => String(x).toLowerCase()),
+    amount: raw.amount == null ? null : Number(raw.amount)
+  };
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   2 · HELPERS
+   ════════════════════════════════════════════════════════════════════ */
+const H = 36e5, DAY = 864e5;
+const CH_COLORS = ['#f4e27e', '#9fd6b0', '#9cc7f5', '#f5a3cf', '#f2b077', '#c9a8f2'];
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+const norm = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+const bump = (m, k) => m.set(k, (m.get(k) || 0) + 1);
+const peak = m => { let b = null; m.forEach((v, k) => { if (!b || v > b[1]) b = [k, v]; }); return b; };
+const keyOf = ts => { const d = new Date(ts); return d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate(); };
+const fmtTime = ts => new Date(ts).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'});
+const fmtDay = (ts, y) => new Date(ts).toLocaleDateString([], y ? {month: 'short', day: 'numeric', year: 'numeric'} : {month: 'short', day: 'numeric'});
+const fmtFull = ts => new Date(ts).toLocaleDateString([], {weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'}) + ', ' + fmtTime(ts);
+const money = n => '$' + Number(n).toFixed(2);
+const short = (s, n) => s.length > n ? s.slice(0, n - 1) + '…' : s;
+function gapText(ms) {
+  const m = Math.round(ms / 6e4);
+  if (m < 90) return m + ' min';
+  const h = Math.round(ms / H * 10) / 10;
+  if (h < 48) return (Number.isInteger(h) ? h : h.toFixed(1)) + ' h';
+  return Math.round(ms / DAY) + ' days';
+}
+const STOP = new Set(('about after again also because before being could every first from have here into just like more most never only other over really should since still than that their them then there these they this those through very want were what when where which while will with would your youre dont didnt wasnt nobody something everything anyone under been made make took take three never always'.split(' ')));
+const wordsOf = r => new Set((r.title + ' ' + r.detail).toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/).filter(w => w.length >= 5 && !STOP.has(w)));
+const hourCounts = list => { const c = new Array(24).fill(0); list.forEach(r => c[r.h]++); return c; };
+
+/* ════════════════════════════════════════════════════════════════════
+   3 · MODEL  — records, chapters, connections, patterns. Nothing here is hard-coded to the demo.
+   ════════════════════════════════════════════════════════════════════ */
+const RECS = RAW.map(adapt).filter(r => !isNaN(r.ts)).sort((a, b) => a.ts - b.ts);
+if (!RECS.length) {
+  document.body.innerHTML = '<p style="padding:24px;font:16px system-ui">No receipts loaded. Check RAW and adapt() in the script.</p>';
+  throw new Error('No receipts loaded');
+}
+const byId = new Map(RECS.map(r => [r.id, r]));
+
+// one slot per calendar day between the first and last receipt (powers the strip)
+const DAYS = [];
+for (let d = new Date(new Date(RECS[0].ts).getFullYear(), new Date(RECS[0].ts).getMonth(), new Date(RECS[0].ts).getDate()); d.getTime() <= RECS[RECS.length - 1].ts; d.setDate(d.getDate() + 1)) DAYS.push(d.getTime());
+const dayIdx = new Map(DAYS.map((t, i) => [keyOf(t), i]));
+function dayOf(ts) { let i = 0; while (i < DAYS.length - 1 && DAYS[i + 1] <= ts) i++; return i; }
+RECS.forEach(r => {
+  r.day = dayIdx.get(keyOf(r.ts));
+  r.h = new Date(r.ts).getHours();
+  r.hay = [r.title, r.detail, r.place, r.tags.join(' '), r.people.join(' '), TYPES[r.type].one].join(' ').toLowerCase();
+});
+
+const TYPE_LIST = Object.keys(TYPES).filter(t => RECS.some(r => r.type === t));
+const TYPE_N = {}; RECS.forEach(r => { TYPE_N[r.type] = (TYPE_N[r.type] || 0) + 1; });
+
+function buildChapters() {
+  let cs;
+  if (STORY.length) {
+    cs = STORY.map(c => Object.assign({}, c, {start: new Date(c.from + 'T00:00:00').getTime(), end: new Date(c.to + 'T23:59:59').getTime()}));
+  } else {                       // fallback: one chapter per month
+    const m = new Map();
+    RECS.forEach(r => {
+      const d = new Date(r.ts), k = d.getFullYear() * 12 + d.getMonth();
+      if (!m.has(k)) m.set(k, {id: 'm' + k, insight: '', title: d.toLocaleDateString([], {month: 'long', year: 'numeric'}),
+        start: new Date(d.getFullYear(), d.getMonth(), 1).getTime(), end: new Date(d.getFullYear(), d.getMonth() + 1, 1).getTime() - 1});
+    });
+    cs = [...m.values()];
+  }
+  cs.forEach(c => { c.receipts = []; });
+  RECS.forEach(r => {
+    let c = cs.find(x => r.ts >= x.start && r.ts <= x.end);
+    if (!c) { let best = Infinity; cs.forEach(x => { const d = Math.min(Math.abs(r.ts - x.start), Math.abs(r.ts - x.end)); if (d < best) { best = d; c = x; } }); }
+    r.ch = c; c.receipts.push(r);
+  });
+  cs = cs.filter(c => c.receipts.length);
+  cs.forEach((c, i) => { c.color = CH_COLORS[i % CH_COLORS.length]; c.d0 = dayOf(c.start); c.d1 = dayOf(c.end); });
+  return cs;
+}
+const CHAPTERS = buildChapters();
+const CLOCK_MAX = Math.max(1, ...CHAPTERS.map(c => Math.max(...hourCounts(c.receipts))));
+
+/* ── connections ─────────────────────────────────────────────────────
+   Two receipts are linked when their evidence adds up to a score of 2 or more.
+   Evidence: same place, same person, shared tag, shared distinctive word, same title, close in time.
+   Rarer evidence weighs more: rare(f) shrinks as the shared thing appears in more receipts. */
+function buildLinks(recs) {
+  const F = {tag: new Map(), place: new Map(), person: new Map(), word: new Map()};
+  recs.forEach(r => {
+    r.words = wordsOf(r);
+    r.tags.forEach(t => bump(F.tag, t));
+    if (r.place) bump(F.place, r.place);
+    r.people.forEach(p => bump(F.person, p));
+    r.words.forEach(w => bump(F.word, w));
+  });
+  const rare = (f, base, max) => Math.min(max, base / Math.sqrt(f));
+  const out = new Map(recs.map(r => [r.id, []]));
+  for (let i = 0; i < recs.length; i++) {
+    for (let j = i + 1; j < recs.length; j++) {
+      const a = recs[i], b = recs[j], why = [];
+      let s = 0;
+      const add = (kind, label, w) => { why.push({kind: kind, label: label, w: w}); s += w; };
+      if (a.place && a.place === b.place) add('place', '@ ' + a.place, rare(F.place.get(a.place), 5, 3.5));
+      a.people.forEach(p => { if (b.people.includes(p)) add('person', 'with ' + p, rare(F.person.get(p), 4, 2.5)); });
+      a.tags.forEach(t => { if (b.tags.includes(t)) add('tag', '#' + t, rare(F.tag.get(t), 4, 3)); });
+      let ws = 0;
+      a.words.forEach(w => { if (b.words.has(w) && ws < 2.5) { const x = rare(F.word.get(w), 3, 1.5); ws += x; add('word', '“' + w + '”', x); } });
+      if (a.type === b.type && a.type !== 'place' && norm(a.title) === norm(b.title)) add('same', 'same title', 2.5);
+      const gap = Math.abs(b.ts - a.ts);
+      if (gap <= 3 * H) add('time', gapText(gap) + ' apart', 2);
+      else if (gap <= 24 * H) add('time', gapText(gap) + ' apart', 0.75);
+      if (s >= 2) {
+        out.get(a.id).push({id: b.id, score: s, why: why});
+        out.get(b.id).push({id: a.id, score: s, why: why});
+      }
+    }
+  }
+  out.forEach(l => l.sort((x, y) => y.score - x.score));
+  return out;
+}
+const links = buildLinks(RECS);
+
+/* ── patterns: things the data does repeatedly, found automatically ── */
+function buildMoments() {
+  const out = []; let cur = [];
+  RECS.forEach(r => {
+    if (cur.length && r.ts - cur[cur.length - 1].ts > 3 * H) { out.push(cur); cur = []; }
+    cur.push(r);
+  });
+  if (cur.length) out.push(cur);
+  return out.map(g => ({items: g, types: [...new Set(g.map(r => r.type))]}))
+    .filter(m => m.items.length >= 3 && m.types.length >= 3)
+    .sort((a, b) => b.types.length - a.types.length || b.items.length - a.items.length);
+}
+function buildPatterns() {
+  const P = [], N = RECS.length;
+  const spread = fn => new Set(RECS.filter(fn).map(r => r.ch.id)).size;
+
+  const night = RECS.filter(r => r.h < 5);
+  if (night.length >= 3) {
+    const cm = new Map(); night.forEach(r => bump(cm, r.ch.title));
+    P.push({id: 'night', title: Math.round(100 * night.length / N) + '% after midnight',
+      text: night.length + ' receipts between 12 and 5 AM, most of them in “' + peak(cm)[0] + '”.', test: r => r.h < 5});
+  }
+  const pm = new Map(); RECS.forEach(r => { if (r.place) bump(pm, r.place); });
+  const tp = peak(pm);
+  if (tp && tp[1] >= 3) P.push({id: 'place', title: tp[0], text: 'The place you kept coming back to: ' + tp[1] + ' receipts across ' + spread(r => r.place === tp[0]) + ' chapters.', test: r => r.place === tp[0]});
+  const tm = new Map(); RECS.forEach(r => r.tags.forEach(t => bump(tm, t)));
+  const tt = peak(tm);
+  if (tt && tt[1] >= 3) P.push({id: 'tag', title: '#' + tt[0], text: tt[1] + ' receipts, showing up in ' + spread(r => r.tags.includes(tt[0])) + ' of ' + CHAPTERS.length + ' chapters.', test: r => r.tags.includes(tt[0])});
+
+  const rk = r => r.type + '|' + norm(r.title);
+  const rep = new Map(); RECS.filter(r => r.type === 'music' || r.type === 'movie').forEach(r => bump(rep, rk(r)));
+  const again = new Set([...rep].filter(e => e[1] > 1).map(e => e[0]));
+  if (again.size) {
+    const names = [...new Set(RECS.filter(r => again.has(rk(r))).map(r => r.title))];
+    P.push({id: 'repeat', title: names.length + ' on repeat', text: names.slice(0, 3).join(', ') + '. Same title, different hour.', test: r => again.has(rk(r))});
+  }
+  buildMoments().slice(0, 3).forEach((m, i) => {
+    const ids = new Set(m.items.map(r => r.id)), a = m.items[0], z = m.items[m.items.length - 1];
+    P.push({id: 'mo' + i, title: fmtDay(a.ts) + ', ' + fmtTime(a.ts) + ' to ' + fmtTime(z.ts),
+      text: 'One moment, ' + m.items.length + ' receipts: ' + m.types.map(t => TYPES[t].one.toLowerCase()).join(' → ') + '.', test: r => ids.has(r.id)});
+  });
+  return P;
+}
+const PATS = buildPatterns();
+
+/* ════════════════════════════════════════════════════════════════════
+   4 · STATE + RENDERING
+   ════════════════════════════════════════════════════════════════════ */
+const state = {mode: 'story', types: new Set(TYPE_LIST), q: '', range: null, pat: null, sel: null, list: new Set(), printed: false};
+
+function filtered(ignoreRange) {
+  const q = state.q.trim().toLowerCase();
+  const pat = state.pat ? PATS.find(p => p.id === state.pat) : null;
+  return RECS.filter(r =>
+    state.types.has(r.type) &&
+    (ignoreRange || !state.range || (r.day >= state.range[0] && r.day <= state.range[1])) &&
+    (!q || r.hay.includes(q)) &&
+    (!pat || pat.test(r)));
+}
+
+/* ── receipt card ── */
+function card(r) {
+  const t = TYPES[r.type];
+  const foot = (r.place || r.amount != null)
+    ? '<div class="rc-f"><span>' + (r.place ? '@ ' + esc(r.place) : '') + '</span><span>' + (r.amount != null ? money(r.amount) : '') + '</span></div>' : '';
+  return '<div class="sheet rc" role="button" tabindex="0" aria-pressed="false" data-id="' + esc(r.id) + '" style="--c:' + t.color + '"><div class="paper">' +
+    '<div class="rc-h"><span class="stamp">' + esc(t.one) + '</span><time>' + fmtDay(r.ts) + ', ' + fmtTime(r.ts) + '</time></div>' +
+    '<div class="rc-t">' + esc(r.title) + '</div>' + (r.detail ? '<div class="rc-d">' + esc(r.detail) + '</div>' : '') + foot + '</div></div>';
+}
+
+/* ── story mode ── */
+function heroHTML(animate) {
+  const lines = CHAPTERS.map((c, i) => '<button class="line" data-lab="' + esc(c.id) + '"><span>' + (i + 1) + '. ' + esc(c.title) + '</span><i></i><b>' + c.receipts.length + '</b></button>').join('');
+  return '<div class="hero"><div class="tape sheet' + (animate ? ' print' : '') + '"><div class="paper">' +
+    '<div class="ctr big">YOUR LIFE, IN RECEIPTS</div>' +
+    '<div class="ctr faint">' + fmtDay(DAYS[0], true) + ' to ' + fmtDay(DAYS[DAYS.length - 1], true) + '</div><hr>' + lines + '<hr>' +
+    '<div class="line total"><span>TOTAL</span><i></i><b>' + RECS.length + '</b></div>' +
+    '<div class="ctr faint" style="margin-top:12px">Thank you. Now pull a thread.</div></div></div>' +
+    '<div class="hero-copy"><h2>Nothing here looks important.</h2>' +
+    '<p>Read it in order, then pull on a thread. Tap any receipt to see what it shares with the rest: a place, a person, a word, the same hour of the night.</p>' +
+    '<p>The bars under each chapter show the hour of the day. Yellow is after midnight, green is early morning.</p></div></div>';
+}
+function clockHTML(list) {
+  return hourCounts(list).map((n, h) =>
+    '<i class="' + (h < 5 ? 'n' : h < 9 ? 'm' : '') + '" style="--h:' + (n ? Math.max(14, Math.round(100 * n / CLOCK_MAX)) : 0) + '%" title="' + h + ':00, ' + n + ' receipts"></i>').join('');
+}
+function signalsHTML(c) {
+  const rs = c.receipts, out = [];
+  const pct = n => Math.round(100 * n / rs.length);
+  const nightN = rs.filter(r => r.h < 5).length, earlyN = rs.filter(r => r.h >= 5 && r.h < 9).length;
+  if (nightN) out.push(pct(nightN) + '% after midnight');
+  if (earlyN) out.push(pct(earlyN) + '% before 9 AM');
+  const tg = new Map(); rs.forEach(r => r.tags.forEach(t => bump(tg, t)));
+  const t = peak(tg); if (t && t[1] > 1) out.push('#' + t[0] + ' x' + t[1]);
+  const pl = new Map(); rs.forEach(r => { if (r.place) bump(pl, r.place); });
+  const p = peak(pl); if (p && p[1] > 1) out.push('@ ' + p[0] + ' x' + p[1]);
+  return out.slice(0, 4).map(s => '<span>' + esc(s) + '</span>').join('');
+}
+function chapterHTML(c, list) {
+  const n = CHAPTERS.indexOf(c) + 1;
+  return '<section class="chap" id="chap-' + esc(c.id) + '" data-ch="' + esc(c.id) + '" style="--cc:' + c.color + '">' +
+    '<div class="chap-h"><span class="no">No. ' + n + '</span><h2>' + esc(c.title) + '</h2>' +
+    '<span class="chap-d">' + fmtDay(c.receipts[0].ts) + ' to ' + fmtDay(c.receipts[c.receipts.length - 1].ts) + ', ' + c.receipts.length + ' receipts</span></div>' +
+    (c.insight ? '<p class="insight">' + esc(c.insight) + '</p>' : '') +
+    '<div class="chap-m"><div><div class="clock">' + clockHTML(c.receipts) + '</div>' +
+    '<div class="clock-l"><span>12 AM</span><span>6 AM</span><span>12 PM</span><span>6 PM</span></div></div>' +
+    '<div class="sig">' + signalsHTML(c) + '</div></div>' +
+    '<div class="grid">' + list.map(card).join('') + '</div></section>';
+}
+const emptyHTML = () => '<div class="empty"><p>No receipts match these filters.</p><button class="tag reset" data-act="reset">Clear filters</button></div>';
+function storyHTML(list) {
+  const by = {};
+  list.forEach(r => { (by[r.ch.id] = by[r.ch.id] || []).push(r); });
+  const shown = CHAPTERS.filter(c => by[c.id]);
+  const animate = !state.printed; state.printed = true;
+  return heroHTML(animate) + (shown.length ? shown.map(c => chapterHTML(c, by[c.id])).join('') : emptyHTML());
+}
+
+/* ── explore mode ── */
+function exploreHTML(list) {
+  const pats = PATS.length ? '<div class="pats">' + PATS.map(p =>
+    '<button class="pat' + (state.pat === p.id ? ' on' : '') + '" data-pat="' + esc(p.id) + '"><b>' + esc(p.title) + '</b><span>' + esc(p.text) + '</span></button>').join('') + '</div>' : '';
+  return pats + (list.length ? '<div class="grid">' + list.map(card).join('') + '</div>' : emptyHTML());
+}
+
+/* ── chips, active filters, strip ── */
+function renderChips() {
+  $('#chips').innerHTML = '<button class="chip" data-act="all"><span>All</span></button>' + TYPE_LIST.map(t =>
+    '<button class="chip' + (state.types.has(t) ? '' : ' off') + '" data-type="' + esc(t) + '" aria-pressed="' + state.types.has(t) + '" style="--c:' + TYPES[t].color + '"><span>' + esc(TYPES[t].many) + '</span><b>' + TYPE_N[t] + '</b></button>').join('');
+}
+function activeHTML(n) {
+  const bits = [];
+  if (state.range) bits.push('<button class="tag" data-act="clear-range">' + fmtDay(DAYS[state.range[0]]) + ' to ' + fmtDay(DAYS[state.range[1]]) + ' ✕</button>');
+  const p = state.pat && PATS.find(x => x.id === state.pat);
+  if (p) bits.push('<button class="tag" data-act="clear-pat">' + esc(p.title) + ' ✕</button>');
+  const dirty = bits.length || state.q || state.types.size < TYPE_LIST.length;
+  return '<span>' + n + ' of ' + RECS.length + ' receipts</span>' + bits.join('') + (dirty ? '<button class="tag reset" data-act="reset">Reset</button>' : '');
+}
+function buildStrip() {
+  const D = DAYS.length;
+  $('#bands').innerHTML = CHAPTERS.map(c => '<div class="band" style="left:' + (100 * c.d0 / D) + '%;width:' + (100 * (c.d1 - c.d0 + 1) / D) + '%;--bt:' + c.color + '26"></div>').join('');
+  $('#labels').innerHTML = CHAPTERS.map((c, i) => '<button class="lab" data-lab="' + esc(c.id) + '" style="left:' + (100 * c.d0 / D) + '%;width:' + (100 * (c.d1 - c.d0 + 1) / D) + '%">' + (i + 1) + ' ' + esc(c.title) + '</button>').join('');
+  $('#span').textContent = fmtDay(DAYS[0], true) + ' to ' + fmtDay(DAYS[D - 1], true) + ', ' + RECS.length + ' receipts';
+}
+function showBrush(a, b) {
+  const lo = Math.min(a, b), hi = Math.max(a, b), el = $('#brush');
+  el.style.display = 'block';
+  el.style.left = (100 * lo / DAYS.length) + '%';
+  el.style.width = (100 * (hi - lo + 1) / DAYS.length) + '%';
+}
+function updateBars() {
+  const cnt = new Array(DAYS.length).fill(0);
+  filtered(true).forEach(r => { cnt[r.day]++; });
+  const max = Math.max(1, ...cnt);
+  $('#bars').innerHTML = cnt.map((n, i) => {
+    const out = state.range && (i < state.range[0] || i > state.range[1]);
+    return '<i class="bar' + (out ? ' out' : '') + '" style="height:' + (n ? Math.max(10, 100 * n / max) : 0) + '%"></i>';
+  }).join('');
+  if (state.range) showBrush(state.range[0], state.range[1]); else $('#brush').style.display = 'none';
+}
+function setActiveChapter(id) { document.querySelectorAll('.lab').forEach(l => l.classList.toggle('act', l.dataset.lab === id)); }
+let io = null;
+function observeChapters() {
+  if (io) io.disconnect();
+  setActiveChapter(null);
+  if (state.mode !== 'story' || !('IntersectionObserver' in window)) return;
+  io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) setActiveChapter(e.target.dataset.ch); }), {rootMargin: '-30% 0px -60% 0px'});
+  document.querySelectorAll('.chap').forEach(el => io.observe(el));
+}
+
+function renderMain() {
+  const list = filtered(false);
+  state.list = new Set(list.map(r => r.id));
+  $('#active').innerHTML = activeHTML(list.length);
+  $('#main').innerHTML = state.mode === 'story' ? storyHTML(list) : exploreHTML(list);
+  document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === state.mode));
+  updateBars();
+  applySelection();
+  observeChapters();
+}
+
+/* ── selection: highlight what the chosen receipt is connected to ── */
+const TOP_LINKS = 8;
+function applySelection() {
+  const sel = state.sel;
+  const linked = new Set(sel ? links.get(sel).slice(0, TOP_LINKS).map(l => l.id) : []);
+  document.querySelectorAll('.rc').forEach(el => {
+    const id = el.dataset.id;
+    el.classList.toggle('sel', id === sel);
+    el.classList.toggle('linked', linked.has(id));
+    el.classList.toggle('dim', !!sel && id !== sel && !linked.has(id));
+    el.setAttribute('aria-pressed', String(id === sel));
+  });
+}
+function select(id) { state.sel = id; applySelection(); renderAside(); }
+
+function detailHTML(r) {
+  const t = TYPES[r.type];
+  return '<div class="det" style="--c:' + t.color + '"><div class="rc-h"><span class="stamp">' + esc(t.one) + '</span></div>' +
+    '<div class="det-t">' + esc(r.title) + '</div>' + (r.detail ? '<p>' + esc(r.detail) + '</p>' : '') +
+    '<dl><dt>When</dt><dd>' + fmtFull(r.ts) + '</dd><dt>Chapter</dt><dd>' + esc(r.ch.title) + '</dd>' +
+    (r.place ? '<dt>Place</dt><dd>' + esc(r.place) + '</dd>' : '') +
+    (r.people.length ? '<dt>People</dt><dd>' + r.people.map(esc).join(', ') + '</dd>' : '') +
+    (r.amount != null ? '<dt>Amount</dt><dd>' + money(r.amount) + '</dd>' : '') + '</dl>' +
+    (r.tags.length ? '<div class="tags">' + r.tags.map(x => '<span>#' + esc(x) + '</span>').join('') + '</div>' : '') + '</div>';
+}
+function constellation(r, ls) {
+  if (!ls.length) return '';
+  const cx = 160, cy = 118, n = ls.length;
+  const pts = ls.map((l, i) => {
+    const o = byId.get(l.id), a = -Math.PI / 2 + i * 2 * Math.PI / n, rad = 92 - 26 * Math.min(1, l.score / 6);
+    return {id: o.id, t: o.title, c: TYPES[o.type].color, s: l.score, x: Math.round(cx + rad * Math.cos(a)), y: Math.round(cy + rad * Math.sin(a))};
+  });
+  return '<svg class="map" viewBox="0 0 320 250" role="group" aria-label="Receipts connected to this one">' +
+    pts.map(p => '<line x1="' + cx + '" y1="' + cy + '" x2="' + p.x + '" y2="' + p.y + '" stroke="' + p.c + '" stroke-opacity=".9" stroke-width="' + (1 + Math.min(3, p.s / 3)).toFixed(1) + '"/>').join('') +
+    pts.map(p => '<g class="node" data-jump="' + esc(p.id) + '" tabindex="0" role="button"><title>' + esc(p.t) + '</title><circle cx="' + p.x + '" cy="' + p.y + '" r="9" fill="' + p.c + '" stroke="#fbfaf4" stroke-width="2"/><text x="' + p.x + '" y="' + (p.y + 23) + '" text-anchor="middle">' + esc(short(p.t, 14)) + '</text></g>').join('') +
+    '<circle cx="' + cx + '" cy="' + cy + '" r="14" fill="' + TYPES[r.type].color + '" stroke="#f4e27e" stroke-width="3"/></svg>';
+}
+function whyItem(l) {
+  const o = byId.get(l.id), t = TYPES[o.type];
+  const reasons = l.why.slice().sort((a, b) => b.w - a.w).slice(0, 4);
+  return '<li class="why-i" data-jump="' + esc(o.id) + '" tabindex="0" style="--c:' + t.color + '"><div class="why-h"><i></i><b>' + esc(o.title) + '</b></div>' +
+    '<div class="why-s">' + esc(t.one) + ', ' + fmtDay(o.ts) + ' ' + fmtTime(o.ts) + ', ' + esc(o.ch.title) + '</div>' +
+    '<div class="why-r">' + reasons.map(x => '<span class="k-' + x.kind + '">' + esc(x.label) + '</span>').join('') + '</div></li>';
+}
+function idleHTML() {
+  const k = [['place', 'same place'], ['person', 'same person'], ['time', 'within 3 hours'], ['tag', 'shared tag'], ['word', 'shared word'], ['same', 'same title']];
+  return '<h3>Pull a thread</h3><p class="note">Tap a receipt. The page compares it with every other one and keeps the strongest matches:</p>' +
+    '<div class="why-r">' + k.map(x => '<span class="k-' + x[0] + '">' + x[1] + '</span>').join('') + '</div>' +
+    '<p class="note">Rarer matches count for more. A tag used twice says more than one used twenty times.</p>' +
+    '<p class="note">In Explore, the cards at the top are patterns found automatically. Tap one to filter to it.</p>';
+}
+function renderAside() {
+  const el = $('#aside'), r = byId.get(state.sel);
+  if (!r) { el.innerHTML = idleHTML(); el.classList.remove('open'); return; }
+  const ls = links.get(r.id).slice(0, TOP_LINKS);
+  el.innerHTML = '<button class="x" data-act="close" aria-label="Close panel">✕</button>' + detailHTML(r) +
+    (ls.length ? '<h3>Connection map</h3>' + constellation(r, ls) + '<h3>Why these are linked</h3><ul class="why">' + ls.map(whyItem).join('') + '</ul>'
+      : '<p class="note">Nothing else shares enough with this receipt. It is a loner, or a thread these rules can’t see yet.</p>');
+  el.classList.add('open');
+  el.scrollTop = 0;
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   5 · INTERACTION
+   ════════════════════════════════════════════════════════════════════ */
+const small = () => window.matchMedia && window.matchMedia('(max-width:900px)').matches;
+function resetFilters() { state.types = new Set(TYPE_LIST); state.q = ''; state.range = null; state.pat = null; $('#q').value = ''; }
+function refresh() { renderChips(); renderMain(); }
+
+function jump(id) {
+  if (!state.list.has(id)) { resetFilters(); refresh(); }
+  select(id);
+  if (small()) return;
+  const el = [...document.querySelectorAll('.rc')].find(e => e.dataset.id === id);
+  if (el) el.scrollIntoView({behavior: 'smooth', block: 'center'});
+}
+function goChapter(id) {
+  const c = CHAPTERS.find(x => x.id === id);
+  if (!c) return;
+  if (state.mode === 'explore') { state.range = [c.d0, c.d1]; renderMain(); return; }
+  if (!document.getElementById('chap-' + id)) { resetFilters(); refresh(); }
+  const el = document.getElementById('chap-' + id);
+  if (el) el.scrollIntoView({behavior: 'smooth', block: 'start'});
+}
+function doAct(a) {
+  if (a === 'close') { select(null); return; }
+  if (a === 'reset') resetFilters();
+  if (a === 'all') state.types = new Set(TYPE_LIST);
+  if (a === 'clear-range') state.range = null;
+  if (a === 'clear-pat') state.pat = null;
+  refresh();
+}
+
+document.addEventListener('click', e => {
+  const t = e.target;
+  let m;
+  if ((m = t.closest('[data-act]'))) return doAct(m.dataset.act);
+  if ((m = t.closest('[data-type]'))) { const k = m.dataset.type; if (state.types.has(k)) state.types.delete(k); else state.types.add(k); return refresh(); }
+  if ((m = t.closest('[data-mode]'))) { state.mode = m.dataset.mode; renderMain(); window.scrollTo(0, 0); return; }
+  if ((m = t.closest('[data-pat]'))) { state.pat = state.pat === m.dataset.pat ? null : m.dataset.pat; return renderMain(); }
+  if ((m = t.closest('[data-lab]'))) return goChapter(m.dataset.lab);
+  if ((m = t.closest('[data-jump]'))) return jump(m.dataset.jump);
+  if ((m = t.closest('.rc'))) return select(state.sel === m.dataset.id ? null : m.dataset.id);
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && state.sel) { select(null); return; }
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('.rc,.why-i,.node')) {
+    e.preventDefault();
+    e.target.dispatchEvent(new MouseEvent('click', {bubbles: true}));
+  }
+});
+$('#q').addEventListener('input', e => { state.q = e.target.value; renderMain(); });
+
+/* period brush: drag across the strip to select days; tap one day to isolate it, tap again to clear */
+(function () {
+  const plot = $('#plot');
+  let drag = null;
+  const dayAt = x => { const r = plot.getBoundingClientRect(); return Math.max(0, Math.min(DAYS.length - 1, Math.floor((x - r.left) / r.width * DAYS.length))); };
+  plot.addEventListener('pointerdown', e => {
+    try { plot.setPointerCapture(e.pointerId); } catch (err) { /* older browsers */ }
+    const i = dayAt(e.clientX); drag = {a: i, b: i, moved: false}; showBrush(i, i);
+  });
+  plot.addEventListener('pointermove', e => {
+    if (!drag) return;
+    const i = dayAt(e.clientX);
+    if (i !== drag.b) { drag.b = i; drag.moved = true; showBrush(drag.a, drag.b); }
+  });
+  const end = () => {
+    if (!drag) return;
+    const d = drag; drag = null;
+    if (d.moved) state.range = [Math.min(d.a, d.b), Math.max(d.a, d.b)];
+    else state.range = (state.range && state.range[0] === d.a && state.range[1] === d.a) ? null : [d.a, d.a];
+    renderMain();
+  };
+  plot.addEventListener('pointerup', end);
+  plot.addEventListener('pointercancel', () => { drag = null; updateBars(); });
+})();
+
+/* ── go ── */
+$('#badge').hidden = !DEMO;
+buildStrip();
+renderChips();
+renderMain();
+renderAside();
+</script>
+</body>
+</html>
